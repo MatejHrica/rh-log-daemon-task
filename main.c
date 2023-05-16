@@ -74,8 +74,13 @@ int main(int argc, char *argv[]) {
     print_statistics(&logger_instance);
     release_logger(&logger_instance);
 
-    close(log_socket);
-    unlink(LOG_SOCKET_PATH);
+    if (close(log_socket) != 0) {
+        perror("close");
+    }
+
+    if (unlink(LOG_SOCKET_PATH) != 0) {
+        perror("unlink");
+    }
 
     return EXIT_SUCCESS;
 }
