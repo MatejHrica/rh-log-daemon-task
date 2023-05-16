@@ -71,17 +71,7 @@ void write_all(int fd, const char *buffer, ssize_t buffer_len) {
     }
 }
 
-void logger_push_message(struct logger *logger_instance, char *msg, ssize_t msg_len) {
-    assert(logger_instance != NULL);
-    assert(logger_instance->msg_array != NULL);
-    assert(msg_len > 0);
-    assert(msg != NULL);
-
-    for (unsigned int i = 0; i < logger_instance->_output_fds_count; i++) {
-        write_all(logger_instance->_output_fds[i], msg, msg_len);
-    }
-    write_all(STDOUT_FILENO, msg, msg_len);
-
+static void save_message(struct logger *logger_instance, const char *msg, ssize_t msg_len) {
     if (logger_instance->msg_count == logger_instance->msg_capacity) {
         logger_instance->msg_capacity *= 2;
         logger_instance->msg_array = realloc(logger_instance->msg_array,
@@ -103,6 +93,19 @@ void logger_push_message(struct logger *logger_instance, char *msg, ssize_t msg_
     actual_message[actual_message_length] = '\0';
 
     logger_instance->msg_array[logger_instance->msg_count++] = actual_message;
+}
+
+void logger_push_message(struct logger *logger_instance, char *msg, ssize_t msg_len) {
+    assert(logger_instance != NULL);
+    assert(logger_instance->msg_array != NULL);
+    assert(msg_len > 0);
+    assert(msg != NULL);
+
+    for (unsigned int i = 0; i < logger_instance->_output_fds_count; i++) {
+        write_all(logger_instance->_output_fds[i], msg, msg_len);
+    }
+    write_all(STDOUT_FILENO, msg, msg_len);
+    save_message(logger_instance, msg, msg_len);
 }
 
 static int sort_strcmp(const void *a, const void *b) {
