@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <signal.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/socket.h>
@@ -72,7 +73,32 @@ static void push_message(struct stored_messages *messages, const char *message, 
     messages->message_array[messages->count++] = actual_message;
 }
 
+static void print_info(struct stored_messages *messages) {
+    printf("Number of messages: %d\n", messages->count);
+}
+
+
+volatile sig_atomic_t sigint_received = 0;
+
+void sigint_handler(int signal) {
+    (void) signal;
+    sigint_received = 1;
+}
+
+static void install_sigint_handler() {
+    struct sigaction action = {0};
+    action.sa_handler = &sigint_handler;
+    if (sigaction(SIGINT, &action, NULL) < 0) {
+        perror("sigaction");
+        exit(EXIT_FAILURE);
+    }
+}
+
 int main() {
+    struct stored_messages messages;
+    init_stored_messages(&messages);
+    install_sigint_handler();
+
     struct sockaddr_un name;
     memset(&name, 0, sizeof(name));
     int log_socket = socket(AF_UNIX, SOCK_DGRAM, 0);
@@ -89,20 +115,18 @@ int main() {
         exit(EXIT_FAILURE);
     }
 
-
-    struct stored_messages messages;
-    init_stored_messages(&messages);
-    for (;;) {
+    while (sigint_received == 0) {
         char buffer[1024] = {0};
         ssize_t bytes_read = read(log_socket, buffer, sizeof(buffer));
         if (bytes_read < 0) {
             perror("read");
-            exit(EXIT_FAILURE);
         } else if (bytes_read != 0) {
+            printf("log msg received\n");
             push_message(&messages, buffer, bytes_read);
         }
     }
 
+    print_info(&messages);
     release_stored_messages(&messages);
 
     close(log_socket);
