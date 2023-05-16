@@ -4,8 +4,73 @@
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <unistd.h>
+#include <assert.h>
 
 #define LOG_SOCKET_PATH "/dev/log"
+
+/**
+ * Finds the index of the actual start of the message.
+ * For example for "<13>May 16 16:19:06 root: hello" returns 26.
+ */
+static ssize_t find_message_start(const char *message, ssize_t message_length) {
+    for (ssize_t i = 0; i < message_length - 1; i++) {
+        if (message[i] == ':' && message[i + 1] == ' ') {
+            return i;
+        }
+    }
+    return -1;
+}
+
+struct stored_messages {
+    char **message_array;
+    unsigned int count;
+    unsigned int capacity;
+};
+
+static void init_stored_messages(struct stored_messages *messages) {
+    messages->count = 0;
+    messages->capacity = 32;
+    messages->message_array = malloc(messages->capacity * sizeof(messages[0]));
+}
+
+static void release_stored_messages(struct stored_messages *messages) {
+    for (unsigned int i = 0; i < messages->count; i++) {
+        free(messages->message_array[i]);
+    }
+    free(messages->message_array);
+    messages->message_array = NULL;
+    messages->count = 0;
+    messages->capacity = 0;
+}
+
+static void push_message(struct stored_messages *messages, const char *message, ssize_t message_length) {
+    assert(messages != NULL);
+    assert(messages->message_array != NULL);
+    assert(message_length > 0);
+    assert(message != NULL);
+
+
+    if (messages->count == messages->capacity) {
+        messages->capacity *= 2;
+        messages->message_array = realloc(messages->message_array, messages->capacity * sizeof(messages[0]));
+    }
+
+    ssize_t actual_message_start = find_message_start(message, message_length);
+    assert(actual_message_start <= message_length);
+    if (actual_message_start < 0) {
+        fprintf(stderr, "Received invalid message: \"");
+        fwrite(message, message_length, 1, stderr);
+        fprintf(stderr, "\"\n");
+        return;
+    }
+
+    size_t actual_message_length = message_length - actual_message_start;
+    char *actual_message = malloc(actual_message_length + 1);
+    strncpy(actual_message, message + actual_message_start, actual_message_length);
+    actual_message[actual_message_length] = '\0';
+
+    messages->message_array[messages->count++] = actual_message;
+}
 
 int main() {
     struct sockaddr_un name;
@@ -24,17 +89,21 @@ int main() {
         exit(EXIT_FAILURE);
     }
 
+
+    struct stored_messages messages;
+    init_stored_messages(&messages);
     for (;;) {
         char buffer[1024] = {0};
-        ssize_t bytes_read = read(log_socket, buffer, sizeof(buffer) - 1);
+        ssize_t bytes_read = read(log_socket, buffer, sizeof(buffer));
         if (bytes_read < 0) {
             perror("read");
             exit(EXIT_FAILURE);
         } else if (bytes_read != 0) {
-            buffer[bytes_read] = '\0';
-            printf("received: %s\n", buffer);
-        };
+            push_message(&messages, buffer, bytes_read);
+        }
     }
+
+    release_stored_messages(&messages);
 
     close(log_socket);
     unlink(LOG_SOCKET_PATH);
