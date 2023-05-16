@@ -17,7 +17,7 @@
 static ssize_t find_message_start(const char *message, ssize_t message_length) {
     for (ssize_t i = 0; i < message_length - 1; i++) {
         if (message[i] == ':' && message[i + 1] == ' ') {
-            return i;
+            return i + 2;
         }
     }
     return -1;
@@ -74,8 +74,42 @@ static void push_message(struct stored_messages *messages, const char *message, 
     messages->message_array[messages->count++] = actual_message;
 }
 
+int sort_strcmp(const void *a, const void *b) {
+    return strcmp(*(char **) a, *(char **) b);
+}
+
+static char *find_most_common_message(struct stored_messages *messages) {
+    if (messages->count == 0) {
+        return NULL;
+    }
+
+    size_t size = messages->count * sizeof(char *);
+    char **message_array = malloc(size);
+    memcpy(message_array, messages->message_array, size);
+
+    qsort(message_array, messages->count, sizeof(char *), &sort_strcmp);
+    unsigned int count = 0;
+    char *most_common_message = NULL;
+    for (unsigned int i = 0; i < messages->count; i++) {
+        if (count == 0 || strcmp(message_array[i], most_common_message) != 0) {
+            most_common_message = message_array[i];
+            count = 1;
+        } else {
+            count++;
+        }
+    }
+
+    return most_common_message;
+}
+
 static void print_info(struct stored_messages *messages) {
     printf("Number of messages: %d\n", messages->count);
+    char *most_frequent_message = find_most_common_message(messages);
+    if (most_frequent_message != NULL) {
+        printf("The most frequent message is: \"%s\"\n", most_frequent_message);
+    }else{
+        printf("The no most frequent message, because there are no messages!\n");
+    }
 }
 
 
