@@ -27,8 +27,13 @@ void init_logger(struct logger *logger_instance, char **output_files, int output
     logger_instance->_output_fds_count = output_files_count;
     logger_instance->_output_fds = malloc((logger_instance->_output_fds_count) * sizeof(int));
     for (int i = 0; i < output_files_count; i++) {
-        logger_instance->_output_fds[i] = open(output_files[i], O_WRONLY | O_APPEND | O_CREAT, 0644);
-        assert(logger_instance->_output_fds[i]);
+        int fd = open(output_files[i], O_WRONLY | O_APPEND | O_CREAT, 0644);
+        if (fd < 0) {
+            perror(output_files[i]);
+            // TODO: should to properly propagate the error
+            exit(EXIT_FAILURE);
+        }
+        logger_instance->_output_fds[i] = fd;
     }
 }
 
