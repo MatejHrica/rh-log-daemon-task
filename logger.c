@@ -87,6 +87,11 @@ static void save_message(struct logger *logger_instance, const char *msg, ssize_
         return;
     }
 
+    // remove trailing newlines before storing
+    while (msg_len > 1 && msg[msg_len - 1] == '\n') {
+        msg_len--;
+    }
+
     size_t actual_message_length = msg_len - actual_message_start;
     char *actual_message = malloc(actual_message_length + 1);
     strncpy(actual_message, msg + actual_message_start, actual_message_length);
