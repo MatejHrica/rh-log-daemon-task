@@ -124,6 +124,7 @@ char *logger_find_most_common_message(struct logger *logger_instance) {
             count++;
         }
     }
+    free(message_array);
 
     return most_common_message;
 }
