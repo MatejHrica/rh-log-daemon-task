@@ -3,6 +3,8 @@
 #include <stdlib.h>
 #include <string.h>
 #include <assert.h>
+#include <fcntl.h>
+#include <errno.h>
 
 /**
  * Finds the index of the actual start of the message.
@@ -17,10 +19,17 @@ static ssize_t find_message_start(const char *message, ssize_t message_length) {
     return -1;
 }
 
-void init_logger(struct logger *logger_instance) {
+void init_logger(struct logger *logger_instance, char **output_files, int output_files_count) {
     logger_instance->msg_count = 0;
     logger_instance->msg_capacity = 32;
     logger_instance->msg_array = malloc(logger_instance->msg_capacity * sizeof(logger_instance[0]));
+
+    logger_instance->_output_fds_count = output_files_count;
+    logger_instance->_output_fds = malloc((logger_instance->_output_fds_count) * sizeof(int));
+    for (int i = 0; i < output_files_count; i++) {
+        logger_instance->_output_fds[i] = open(output_files[i], O_WRONLY | O_APPEND | O_CREAT, 0644);
+        assert(logger_instance->_output_fds[i]);
+    }
 }
 
 void release_logger(struct logger *logger_instance) {
@@ -31,6 +40,30 @@ void release_logger(struct logger *logger_instance) {
     logger_instance->msg_array = NULL;
     logger_instance->msg_count = 0;
     logger_instance->msg_capacity = 0;
+
+    for (unsigned int i = 0; i < logger_instance->_output_fds_count; i++) {
+        if (close(logger_instance->_output_fds[i]) != 0) {
+            perror("close");
+        }
+    }
+
+    free(logger_instance->_output_fds);
+    logger_instance->_output_fds = NULL;
+    logger_instance->_output_fds_count = 0;
+}
+
+void write_all(int fd, const char *buffer, ssize_t buffer_len) {
+    while (buffer_len > 0) {
+        ssize_t bytes_written = write(fd, buffer, buffer_len);
+        if (bytes_written < 0) {
+            if (errno == EINTR) {
+                perror("write");
+            }
+            return;
+        }
+        buffer += bytes_written;
+        buffer_len -= bytes_written;
+    }
 }
 
 void logger_push_message(struct logger *logger_instance, char *msg, ssize_t msg_len) {
@@ -38,6 +71,11 @@ void logger_push_message(struct logger *logger_instance, char *msg, ssize_t msg_
     assert(logger_instance->msg_array != NULL);
     assert(msg_len > 0);
     assert(msg != NULL);
+
+    for (unsigned int i = 0; i < logger_instance->_output_fds_count; i++) {
+        write_all(logger_instance->_output_fds[i], msg, msg_len);
+    }
+    write_all(STDOUT_FILENO, msg, msg_len);
 
     if (logger_instance->msg_count == logger_instance->msg_capacity) {
         logger_instance->msg_capacity *= 2;

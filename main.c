@@ -37,9 +37,9 @@ static void print_statistics(struct logger *logger_instance) {
     }
 }
 
-int main() {
+int main(int argc, char *argv[]) {
     struct logger logger_instance;
-    init_logger(&logger_instance);
+    init_logger(&logger_instance, argv + 1, argc - 1);
     install_sigint_handler();
 
     struct sockaddr_un name;
@@ -60,14 +60,14 @@ int main() {
 
     while (sigint_received == 0) {
         char buffer[1024] = {0};
-        ssize_t bytes_read = read(log_socket, buffer, sizeof(buffer));
+        ssize_t bytes_read = read(log_socket, buffer, sizeof(buffer) - 1);
         if (bytes_read < 0) {
             if (errno != EINTR) {
                 perror("read");
             }
         } else if (bytes_read != 0) {
-            printf("log msg received\n");
-            logger_push_message(&logger_instance, buffer, bytes_read);
+            buffer[bytes_read] = '\n';
+            logger_push_message(&logger_instance, buffer, bytes_read + 1);
         }
     }
 
