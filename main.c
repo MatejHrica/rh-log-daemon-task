@@ -6,6 +6,7 @@
 #include <sys/un.h>
 #include <unistd.h>
 #include <assert.h>
+#include <errno.h>
 
 #define LOG_SOCKET_PATH "/dev/log"
 
@@ -119,7 +120,9 @@ int main() {
         char buffer[1024] = {0};
         ssize_t bytes_read = read(log_socket, buffer, sizeof(buffer));
         if (bytes_read < 0) {
-            perror("read");
+            if (errno != EINTR) {
+                perror("read");
+            }
         } else if (bytes_read != 0) {
             printf("log msg received\n");
             push_message(&messages, buffer, bytes_read);
